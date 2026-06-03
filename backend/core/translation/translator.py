@@ -1,10 +1,11 @@
 import os
-import google.generativeai as genai
+from google import genai
 from langdetect import detect
 from dotenv import load_dotenv
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 SUPPORTED_LANGUAGES = {
     "Hindi":     "hi",
@@ -26,7 +27,6 @@ def translate_text(text: str, target_language: str) -> str:
     if target_language not in SUPPORTED_LANGUAGES:
         return text
 
-    model  = genai.GenerativeModel("gemini-2.0-flash")
     prompt = (
         f"Translate the following legal text into {target_language}. "
         f"Keep all section numbers, article numbers, and legal terms exactly as they are. "
@@ -35,13 +35,16 @@ def translate_text(text: str, target_language: str) -> str:
         f"Return ONLY the translated text, nothing else."
     )
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model    = "gemini-2.0-flash",
+        contents = prompt
+    )
     return response.text.strip()
 
 
 def detect_language(text: str) -> str:
     try:
-        code = detect(text)
+        code        = detect(text)
         reverse_map = {v: k for k, v in SUPPORTED_LANGUAGES.items()}
         return reverse_map.get(code, "English")
     except Exception:

@@ -1,14 +1,16 @@
 import os, base64, json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def extract_fir_data(image_path: str) -> dict:
-    model = genai.GenerativeModel("gemini-2.0-flash")
+
     with open(image_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode("utf-8")
+        image_bytes = f.read()
 
     prompt = """
     This is an Indian FIR (First Information Report).
@@ -29,20 +31,25 @@ def extract_fir_data(image_path: str) -> dict:
     Return ONLY the JSON. No explanation. No markdown. No extra text.
     """
 
-    response = model.generate_content([
-        prompt,
-        {"mime_type": "image/jpeg", "data": image_data}
-    ])
+    response = client.models.generate_content(
+        model   = "gemini-2.0-flash",
+        contents= [
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+            prompt
+        ]
+    )
 
     raw = response.text.strip()
+
+    # Strip markdown fences if present
     if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+        lines = raw.split("\n")
+        raw   = "\n".join(lines[1:-1])
+
     return json.loads(raw.strip())
 
 
 def check_confidence(data: dict) -> float:
     required = ["fir_number", "sections_charged", "accused_name", "date_of_fir"]
-    filled = sum(1 for f in required if data.get(f))
+    filled   = sum(1 for f in required if data.get(f))
     return filled / len(required)
