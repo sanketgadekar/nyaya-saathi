@@ -1,25 +1,16 @@
 import os
-from google import genai
 from langdetect import detect
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
 SUPPORTED_LANGUAGES = {
-    "Hindi":     "hi",
-    "Marathi":   "mr",
-    "Tamil":     "ta",
-    "Telugu":    "te",
-    "Bengali":   "bn",
-    "Gujarati":  "gu",
-    "Kannada":   "kn",
-    "Malayalam": "ml",
-    "Punjabi":   "pa",
-    "Odia":      "or",
-    "English":   "en",
+    "Hindi": "hi", "Marathi": "mr", "Tamil": "ta",
+    "Telugu": "te", "Bengali": "bn", "Gujarati": "gu",
+    "Kannada": "kn", "Malayalam": "ml", "Punjabi": "pa",
+    "Odia": "or", "English": "en",
 }
+
 
 def translate_text(text: str, target_language: str) -> str:
     if target_language == "English":
@@ -27,19 +18,22 @@ def translate_text(text: str, target_language: str) -> str:
     if target_language not in SUPPORTED_LANGUAGES:
         return text
 
+    from core.llm.groq_client import call_llm
+
     prompt = (
         f"Translate the following legal text into {target_language}. "
-        f"Keep all section numbers, article numbers, and legal terms exactly as they are. "
-        f"Only translate the explanatory language, not the law citations.\n\n"
-        f"Text to translate:\n{text}\n\n"
+        f"Keep all section numbers (like BNS 303, BNSS 479), article numbers, "
+        f"and legal terms exactly as they are. "
+        f"Only translate the explanatory language.\n\n"
+        f"Text:\n{text}\n\n"
         f"Return ONLY the translated text, nothing else."
     )
 
-    response = client.models.generate_content(
-        model    = "gemini-2.0-flash",
-        contents = prompt
+    return call_llm(
+        system_prompt=f"You are a legal translator. Translate accurately into {target_language}.",
+        user_prompt=prompt,
+        temperature=0.1
     )
-    return response.text.strip()
 
 
 def detect_language(text: str) -> str:
