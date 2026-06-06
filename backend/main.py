@@ -68,37 +68,16 @@ async def explain_fir(
         shutil.copyfileobj(file.file, f)
 
     try:
-        from core.ocr.gemini_vision import extract_fir_data, check_confidence
-        from core.rag.retriever      import explain_sections
-        from core.translation.translator import translate_text
-
-        fir_data   = extract_fir_data(filename)
-        confidence = check_confidence(fir_data)
-
-        if confidence < 0.5:
-            return {"status": "low_confidence",
-                    "message": "Image quality too low. Please upload a clearer photo.",
-                    "confidence": round(confidence, 2)}
-
-        explanation = explain_sections(
-            fir_data.get("sections_charged", []),
-            fir_data.get("date_of_fir", "")
-        )
-
-        if language != "English":
-            explanation = translate_text(explanation, language)
-
-        return {
-            "status":      "success",
-            "fir_data":    fir_data,
-            "confidence":  round(confidence, 2),
-            "explanation": explanation,
-            "language":    language
-        }
+        from features.fir_explainer.agent import explain_fir as run_explainer
+        result = run_explainer(filename, language)
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
     finally:
         if os.path.exists(filename):
             os.remove(filename)
-
 
 # ── Route 2: Rights Awareness ────────────────────────────────────────────────
 
