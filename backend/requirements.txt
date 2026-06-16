@@ -9,8 +9,6 @@ langchain-community
 chromadb
 sentence-transformers
 groq
-easyocr
-opencv-python-headless
 reportlab
 Pillow
 langdetect

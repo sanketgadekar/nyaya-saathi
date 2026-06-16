@@ -74,12 +74,14 @@ def build_if_empty():
     print(f"[Startup] Mapping: {len(mapping)} entries loaded")
     print("[Startup] Knowledge base ready!")
     # Preload EasyOCR model so first user request is fast
-    print("[Startup] Preloading EasyOCR model...")
+# Verify Groq vision is accessible
+    print("[Startup] Verifying Groq API connection...")
     try:
-        from core.ocr.gemini_vision import get_ocr_reader
-        get_ocr_reader()
-        print("[Startup] EasyOCR ready.")
+        import os
+        from groq import Groq
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        print("[Startup] Groq API ready.")
     except Exception as e:
-        print(f"[Startup] EasyOCR preload warning: {e}")
+        print(f"[Startup] Groq API warning: {e}")
 if __name__ == "__main__":
     build_if_empty()

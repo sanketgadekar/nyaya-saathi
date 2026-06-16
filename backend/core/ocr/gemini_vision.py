@@ -1,222 +1,156 @@
-import json, re, os
+import json, re, os, base64
 from dotenv import load_dotenv
+from groq import Groq
 
 load_dotenv()
 
+_groq_client = None
 
-def get_ocr_reader():
-    import easyocr
-    if not hasattr(get_ocr_reader, "_reader"):
-        print("[OCR] Loading EasyOCR model...")
-        get_ocr_reader._reader = easyocr.Reader(
-            ["en"],     # English only — avoids Devanagari confusion on printed FIRs
-            gpu=False,
-            verbose=False
-        )
-        print("[OCR] EasyOCR model loaded.")
-    return get_ocr_reader._reader
+def get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    return _groq_client
 
 
-def preprocess_image(image_path: str) -> str:
-    """Enhance image for better OCR accuracy."""
-    from PIL import Image, ImageEnhance, ImageFilter
-    import tempfile
+def image_to_base64(image_path: str) -> tuple:
+    """Convert image to base64 string and detect mime type."""
+    ext = image_path.lower().split(".")[-1]
+    mime_map = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "png": "image/png",  "webp": "image/webp"
+    }
+    mime_type = mime_map.get(ext, "image/jpeg")
 
-    img = Image.open(image_path).convert("RGB")
+    with open(image_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    # Scale up if small
-    w, h = img.size
-    if w < 1200:
-        scale = 1200 / w
-        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-
-    # Grayscale → contrast → sharpen
-    img = img.convert("L")
-    img = ImageEnhance.Contrast(img).enhance(2.5)
-    img = ImageEnhance.Sharpness(img).enhance(2.0)
-    img = img.filter(ImageFilter.SHARPEN)
-
-    # Save to temp file
-    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-    img.save(tmp.name, quality=98)
-    return tmp.name
+    return b64, mime_type
 
 
 def extract_fir_data(image_path: str) -> dict:
-    reader = get_ocr_reader()
+    """
+    Extract FIR fields using Groq vision API.
+    Uses llama-4-scout-17b-16e-instruct which supports image input.
+    Zero memory overhead — API call only.
+    """
+    print("[OCR] Sending FIR image to Groq vision API...")
 
-    # Preprocess
-    processed_path = preprocess_image(image_path)
+    client = get_groq_client()
+    b64_image, mime_type = image_to_base64(image_path)
+
+    prompt = """You are reading an Indian FIR (First Information Report).
+Extract ALL fields from this document and return ONLY a valid JSON object.
+No markdown, no explanation, no code blocks — just raw JSON.
+
+Return exactly this structure:
+{
+    "fir_number": "string or null",
+    "police_station": "string or null",
+    "district": "string or null",
+    "state": "string or null",
+    "date_of_fir": "DD/MM/YYYY format or null",
+    "date_of_offence": "DD/MM/YYYY format or null",
+    "accused_name": "string or null",
+    "accused_address": "string or null",
+    "sections_charged": ["BNS 303", "BNS 318"],
+    "complainant_name": "string or null",
+    "brief_facts": "one paragraph or null"
+}
+
+For sections_charged: prefix with BNS if FIR date is after 01/07/2024, else IPC.
+Return ONLY the JSON object. Nothing else."""
 
     try:
-        # EasyOCR — paragraph mode groups nearby text better
-        raw = reader.readtext(
-            processed_path,
-            detail=1,
-            paragraph=False,
-            batch_size=4
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{b64_image}"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1000
         )
-    finally:
-        try:
-            os.remove(processed_path)
-        except Exception:
-            pass
 
-    # Sort by Y position (top to bottom), then X (left to right)
-    sorted_results = sorted(raw, key=lambda r: (r[0][0][1], r[0][0][0]))
+        raw = response.choices[0].message.content.strip()
+        print(f"[OCR] Groq vision raw response: {raw[:200]}")
 
-    # Build full text
-    lines = []
-    for (bbox, text, conf) in sorted_results:
-        text = text.strip()
-        if conf > 0.2 and text and len(text) > 1:
-            # Clean common EasyOCR mistakes
-            text = text.replace("Nai", "No:").replace("Folice", "Police")
-            text = text.replace("Nlashik", "Nashik").replace("Fzad", "Road")
-            text = text.replace("Mlaharashtra", "Maharashtra")
-            lines.append(text)
+        # Strip markdown fences if present
+        if "```" in raw:
+            lines = raw.split("\n")
+            raw = "\n".join(
+                l for l in lines
+                if not l.strip().startswith("```")
+            )
 
-    full_text = "\n".join(lines)
-    print(f"[OCR] {len(lines)} lines extracted")
-    print(f"[OCR] Text preview:\n{full_text[:400]}\n")
+        data = json.loads(raw.strip())
+        print(f"[OCR] Extracted: {json.dumps(data, indent=2)}")
+        return data
 
-    # ── Initialize data dict ───────────────────────────────────────────
-    data = {
-        "fir_number":       None,
-        "police_station":   None,
-        "district":         None,
-        "state":            None,
-        "date_of_fir":      None,
-        "date_of_offence":  None,
-        "accused_name":     None,
-        "accused_address":  None,
-        "sections_charged": [],
-        "complainant_name": None,
-        "brief_facts":      None
-    }
+    except json.JSONDecodeError as e:
+        print(f"[OCR] JSON parse error: {e}. Raw: {raw[:300]}")
+        return _fallback_extraction(raw)
+    except Exception as e:
+        print(f"[OCR] Groq vision error: {e}")
+        return _empty_fir_data()
 
-    # ── PASS 1: Line-by-line structured parsing ─────────────────────────
-    for i, line in enumerate(lines):
-        ll = line.lower().strip()
 
-        # FIR Number — multiple formats
-        if not data["fir_number"]:
-            patterns = [
-                r'fir\s*(?:no|num|number)[\.:\s#]*(\d+\s*/\s*\d+)',
-                r'(?:no|num)[\.:\s]*(\d+\s*/\s*\d+)',
-                r'(\d{2,4}\s*/\s*\d{4})',
-            ]
-            for pat in patterns:
-                m = re.search(pat, ll)
-                if m:
-                    data["fir_number"] = m.group(1).replace(" ", "").strip()
-                    break
+def _fallback_extraction(text: str) -> dict:
+    """
+    If JSON parsing fails, extract fields with regex from raw text.
+    """
+    print("[OCR] Using regex fallback extraction...")
+    data = _empty_fir_data()
 
-        # Police station
-        if not data["police_station"]:
-            if any(x in ll for x in ["police station", "p.s.", "ps:"]):
-                parts = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(parts) > 1 and len(parts[1].strip()) > 2:
-                    data["police_station"] = parts[1].strip()
+    # FIR number
+    m = re.search(r'fir[_\s]*number["\s:]+([0-9/]+)', text, re.IGNORECASE)
+    if m: data["fir_number"] = m.group(1).strip()
 
-        # District
-        if not data["district"]:
-            if "district" in ll or "dist:" in ll:
-                parts = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(parts) > 1:
-                    val = parts[1].strip().split(",")[0].strip()
-                    if val and len(val) < 40:
-                        data["district"] = val
+    # Date
+    m = re.search(r'date[_\s]*of[_\s]*fir["\s:]+([0-9/]+)', text, re.IGNORECASE)
+    if m: data["date_of_fir"] = m.group(1).strip()
 
-        # State
-        if not data["state"]:
-            if "state" in ll and "police" not in ll and "station" not in ll:
-                parts = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(parts) > 1:
-                    val = parts[1].strip()
-                    if val and len(val) < 30:
-                        data["state"] = val
+    # Accused name
+    m = re.search(r'accused[_\s]*name["\s:]+([^",\n]+)', text, re.IGNORECASE)
+    if m: data["accused_name"] = m.group(1).strip().strip('"')
 
-        # Date of FIR
-        if not data["date_of_fir"]:
-            if any(x in ll for x in ["date of fir", "date of reg", "fir date"]):
-                m = re.search(r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})', line)
-                if m:
-                    data["date_of_fir"] = f"{m.group(1)}/{m.group(2)}/{m.group(3)}"
-
-        # Date of offence
-        if not data["date_of_offence"]:
-            if any(x in ll for x in ["date of offence", "offence date", "occurrence"]):
-                m = re.search(r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})', line)
-                if m:
-                    data["date_of_offence"] = f"{m.group(1)}/{m.group(2)}/{m.group(3)}"
-
-        # Accused name
-        if not data["accused_name"]:
-            if "accused" in ll and ("name" in ll or ":" in line):
-                parts = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(parts) > 1:
-                    name = parts[1].strip().lstrip("'\"").strip()
-                    if 2 < len(name) < 60 and not any(c.isdigit() for c in name[:3]):
-                        data["accused_name"] = name
-
-        # Complainant
-        if not data["complainant_name"]:
-            if any(x in ll for x in ["complainant", "informant"]):
-                parts = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(parts) > 1:
-                    name = parts[1].strip()
-                    if 2 < len(name) < 60:
-                        data["complainant_name"] = name
-
-        # Sections — BNS/IPC
-        sec_matches = re.findall(
-            r'(?:BNS|IPC)\s*(\d+[A-Za-z]?)',
-            line, re.IGNORECASE
-        )
-        for s in sec_matches:
-            # Only accept clean numeric sections
-            clean = re.sub(r'[^\d]', '', s)
-            if len(clean) >= 2:
-                entry = f"BNS {clean}"
-                if entry not in data["sections_charged"]:
-                    data["sections_charged"].append(entry)
-
-    # ── PASS 2: Full text scan for any missed fields ───────────────────
-
-    # Dates anywhere in text
-    if not data["date_of_fir"]:
-        dates = re.findall(r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{4})', full_text)
-        if dates:
-            d = dates[0]
-            data["date_of_fir"] = f"{d[0]}/{d[1]}/{d[2]}"
-
-    # Sections anywhere in text (clean numeric only)
-    if not data["sections_charged"]:
-        raw_secs = re.findall(r'(?:BNS|IPC)\s*(\d+)', full_text, re.IGNORECASE)
-        for s in raw_secs:
-            entry = f"BNS {s}"
-            if entry not in data["sections_charged"]:
-                data["sections_charged"].append(entry)
-
-    # Ultimate fallback
-    if not data["sections_charged"]:
-        print("[OCR] No sections found — using fallback BNS 303")
+    # Sections
+    sections = re.findall(r'(?:BNS|IPC)\s*\d+[A-Za-z]?', text, re.IGNORECASE)
+    if sections:
+        data["sections_charged"] = list(set(sections))
+    else:
         data["sections_charged"] = ["BNS 303"]
 
-    print(f"[OCR] Final result: {json.dumps(data, indent=2)}")
     return data
 
 
-def _is_bns_date(date_str: str) -> bool:
-    try:
-        parts = date_str.split("/")
-        if len(parts) == 3:
-            day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
-            return (year > 2024) or (year == 2024 and month >= 7)
-    except Exception:
-        pass
-    return True
+def _empty_fir_data() -> dict:
+    return {
+        "fir_number": None,
+        "police_station": None,
+        "district": None,
+        "state": None,
+        "date_of_fir": None,
+        "date_of_offence": None,
+        "accused_name": None,
+        "accused_address": None,
+        "sections_charged": ["BNS 303"],
+        "complainant_name": None,
+        "brief_facts": None
+    }
 
 
 def check_confidence(data: dict) -> float:
