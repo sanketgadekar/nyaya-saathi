@@ -69,7 +69,7 @@ export default function MyRights() {
                   className={`text-xs px-3 py-1.5 rounded-full border transition-colors
                     ${situation === s
                       ? "bg-purple-600 text-white border-purple-600"
-                      : "border-gray-300 text-gray-600 hover:border-purple-400"}`}>
+                      : "border-gray-300 text-black hover:border-purple-400"}`}>
                   {s}
                 </button>
               ))}
@@ -80,21 +80,24 @@ export default function MyRights() {
               value={situation}
               onChange={e => { setSituation(e.target.value); setResult(null); }}
               placeholder="Or describe your situation here in any language..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                         focus:outline-none focus:border-purple-500 resize-none"
+                           className="w-full border border-gray-300 rounded-lg px-3 py-2 py-2
+                           text-gray-900
+                           placeholder:text-gray-500
+                           focus:outline-none focus:border-purple-500 resize-none"
             />
 
             <select
               value={language}
               onChange={e => setLanguage(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+              className="w-full border border-gray-300 rounded-lg px-3 py-2
+                         bg-white text-gray-500
                          focus:outline-none focus:border-purple-500">
               {LANGUAGES.map(l => <option key={l}>{l}</option>)}
             </select>
 
             <button onClick={handleSubmit} disabled={loading || !situation.trim()}
-              className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold
-                         text-sm disabled:opacity-40 hover:bg-purple-700 transition-colors">
+              className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold
+                         text-base opacity-100 hover:bg-purple-800 transition-colors">
               {loading ? "Finding your rights..." : "Show My Rights 🛡️"}
             </button>
           </div>
