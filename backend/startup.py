@@ -10,10 +10,34 @@ def build_if_empty():
         bns_collection, rights_collection, mapping_collection
     )
 
-    if bns_collection.count() > 0:
-        print(f"[Startup] Knowledge base already built "
-              f"({bns_collection.count()} BNS sections). Skipping.")
+    bns_count    = bns_collection.count()
+    rights_count = rights_collection.count()
+    mapping_count = mapping_collection.count()
+
+    print(f"[Startup] Current state — BNS: {bns_count}, Rights: {rights_count}, Mapping: {mapping_count}")
+
+    if bns_count > 0 and rights_count > 0 and mapping_count > 0:
+        print("[Startup] All collections already populated. Skipping rebuild.")
         return
+
+    print("[Startup] One or more collections empty — rebuilding all...")
+
+    # Clear any partial data first to avoid duplicate ID errors
+    try:
+        if bns_count > 0:
+            existing_ids = bns_collection.get()["ids"]
+            if existing_ids:
+                bns_collection.delete(ids=existing_ids)
+        if rights_count > 0:
+            existing_ids = rights_collection.get()["ids"]
+            if existing_ids:
+                rights_collection.delete(ids=existing_ids)
+        if mapping_count > 0:
+            existing_ids = mapping_collection.get()["ids"]
+            if existing_ids:
+                mapping_collection.delete(ids=existing_ids)
+    except Exception as e:
+        print(f"[Startup] Clear warning (safe to ignore): {e}")
 
     print("[Startup] Building knowledge base...")
 

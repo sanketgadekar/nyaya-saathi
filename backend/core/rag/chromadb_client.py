@@ -32,6 +32,7 @@ def query_rights(situation: str, n: int = 5) -> list:
     try:
         count = rights_collection.count()
         if count == 0:
+            print("[RAG WARNING] rights_collection is EMPTY on this server")
             return []
         results = rights_collection.query(query_texts=[situation], n_results=min(n, count))
         return results["documents"][0] if results["documents"] else []

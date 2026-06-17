@@ -7,73 +7,86 @@ from core.llm.groq_client import call_llm
 # Pre-loaded legal aid directory
 # In production this comes from Supabase — for now hardcoded for testing
 LEGAL_AID_DIRECTORY = [
+    # Nashik
     {
-        "name":           "DLSA Nashik — District Legal Services Authority",
-        "type":           "NALSA",
-        "district":       "Nashik",
-        "state":          "Maharashtra",
-        "address":        "District Court Complex, Nashik, Maharashtra 422001",
-        "phone":          "0253-2310234",
+        "name": "DLSA Nashik — District Legal Services Authority",
+        "type": "NALSA", "district": "Nashik", "state": "Maharashtra",
+        "address": "District Court Complex, Nashik, Maharashtra 422001",
+        "phone": "0253-2310234",
         "specialisation": ["bail","criminal","undertrial","general"],
-        "free":           True,
-        "timing":         "Mon-Sat 10am-5pm"
+        "free": True, "timing": "Mon-Sat 10am-5pm"
+    },
+    # Pune
+    {
+        "name": "DLSA Pune — District Legal Services Authority",
+        "type": "NALSA", "district": "Pune", "state": "Maharashtra",
+        "address": "Pune District Court Complex, Shivajinagar, Pune 411005",
+        "phone": "020-25539111",
+        "specialisation": ["bail","criminal","undertrial","general"],
+        "free": True, "timing": "Mon-Sat 10am-5pm"
     },
     {
-        "name":           "Maharashtra State Legal Services Authority (MSLSA)",
-        "type":           "SLSA",
-        "district":       "All Maharashtra",
-        "state":          "Maharashtra",
-        "address":        "Bombay High Court Campus, Mumbai 400001",
-        "phone":          "022-22630941",
-        "specialisation": ["bail","criminal","civil","family","general"],
-        "free":           True,
-        "timing":         "Mon-Fri 10am-5pm"
-    },
-    {
-        "name":           "Majlis Manch — Women's Legal Aid",
-        "type":           "NGO",
-        "district":       "Mumbai / Pan Maharashtra",
-        "state":          "Maharashtra",
-        "address":        "Majlis, Mumbai",
-        "phone":          "022-23755696",
-        "specialisation": ["domestic_violence","498a","women","divorce","maintenance"],
-        "free":           True,
-        "timing":         "Mon-Sat 10am-6pm"
-    },
-    {
-        "name":           "Tele-Law CSC Centre — Nashik",
-        "type":           "Tele-Law",
-        "district":       "Nashik",
-        "state":          "Maharashtra",
-        "address":        "Common Service Centre, Nashik Road, Nashik",
-        "phone":          "1800-103-3933",
+        "name": "Pune Tele-Law CSC Centre",
+        "type": "Tele-Law", "district": "Pune", "state": "Maharashtra",
+        "address": "Common Service Centre, Pune",
+        "phone": "1800-103-3933",
         "specialisation": ["general","rti","consumer","criminal"],
-        "free":           True,
-        "timing":         "Mon-Sat 9am-6pm"
+        "free": True, "timing": "Mon-Sat 9am-6pm"
+    },
+    # Mumbai
+    {
+        "name": "DLSA Mumbai City — District Legal Services Authority",
+        "type": "NALSA", "district": "Mumbai", "state": "Maharashtra",
+        "address": "Mumbai City Civil and Sessions Court, Mumbai 400001",
+        "phone": "022-22621234",
+        "specialisation": ["bail","criminal","undertrial","general"],
+        "free": True, "timing": "Mon-Sat 10am-5pm"
+    },
+    # Nagpur
+    {
+        "name": "DLSA Nagpur — District Legal Services Authority",
+        "type": "NALSA", "district": "Nagpur", "state": "Maharashtra",
+        "address": "District Court Complex, Nagpur 440001",
+        "phone": "0712-2566800",
+        "specialisation": ["bail","criminal","undertrial","general"],
+        "free": True, "timing": "Mon-Sat 10am-5pm"
+    },
+    # Statewide
+    {
+        "name": "Maharashtra State Legal Services Authority (MSLSA)",
+        "type": "SLSA", "district": "All Maharashtra", "state": "Maharashtra",
+        "address": "Bombay High Court Campus, Mumbai 400001",
+        "phone": "022-22630941",
+        "specialisation": ["bail","criminal","civil","family","general"],
+        "free": True, "timing": "Mon-Fri 10am-5pm"
     },
     {
-        "name":           "NALSA Toll-Free Helpline",
-        "type":           "Helpline",
-        "district":       "All India",
-        "state":          "All India",
-        "address":        "National Legal Services Authority, New Delhi",
-        "phone":          "15100",
+        "name": "Majlis Manch — Women's Legal Aid",
+        "type": "NGO", "district": "Mumbai / Pan Maharashtra", "state": "Maharashtra",
+        "address": "Majlis, Mumbai",
+        "phone": "022-23755696",
+        "specialisation": ["domestic_violence","498a","women","divorce","maintenance"],
+        "free": True, "timing": "Mon-Sat 10am-6pm"
+    },
+    # All India fallback
+    {
+        "name": "NALSA Toll-Free Helpline",
+        "type": "Helpline", "district": "All India", "state": "All India",
+        "address": "National Legal Services Authority, New Delhi",
+        "phone": "15100",
         "specialisation": ["general","bail","undertrial","criminal","civil"],
-        "free":           True,
-        "timing":         "24/7"
+        "free": True, "timing": "24/7"
     },
     {
-        "name":           "Nyaya Bandhu Pro-Bono Portal",
-        "type":           "Pro-Bono",
-        "district":       "All India",
-        "state":          "All India",
-        "address":        "Online — nyayabandhu.gov.in",
-        "phone":          "Apply online at nyayabandhu.gov.in",
+        "name": "Nyaya Bandhu Pro-Bono Portal",
+        "type": "Pro-Bono", "district": "All India", "state": "All India",
+        "address": "Online — nyayabandhu.gov.in",
+        "phone": "Apply online at nyayabandhu.gov.in",
         "specialisation": ["civil","criminal","family","property","general"],
-        "free":           True,
-        "timing":         "Online 24/7"
+        "free": True, "timing": "Online 24/7"
     },
 ]
+
 
 
 def detect_case_type(situation: str) -> list:
@@ -104,17 +117,23 @@ def find_aid(situation: str, district: str, state: str) -> dict:
     case_types = detect_case_type(situation)
     print(f"[Legal Aid] Detected case types: {case_types}")
 
-    # Score each aid organisation
+    district_clean = district.strip().lower()
+    state_clean     = state.strip().lower()
+
     scored = []
     for org in LEGAL_AID_DIRECTORY:
         score = 0
+        org_district = org["district"].lower()
+        org_state    = org["state"].lower()
 
-        # Location match
-        if district.lower() in org["district"].lower():
-            score += 3
-        if state.lower() in org["state"].lower():
+        # Exact district match — highest priority
+        if district_clean and district_clean in org_district:
+            score += 5
+        # State match
+        if state_clean and state_clean in org_state:
             score += 2
-        if org["district"] == "All India" or org["state"] == "All India":
+        # All India fallback — lowest priority, only used as filler
+        if "all india" in org_district:
             score += 1
 
         # Specialisation match
@@ -122,13 +141,29 @@ def find_aid(situation: str, district: str, state: str) -> dict:
             if ct in org["specialisation"]:
                 score += 2
 
-        scored.append({"org": org, "score": score})
+        if score > 0:
+            scored.append({"org": org, "score": score})
 
-    # Sort by score and take top 3
+    # Sort by score, then deduplicate by name to avoid showing same org twice
     scored.sort(key=lambda x: x["score"], reverse=True)
-    top3 = [item["org"] for item in scored[:3]]
+    seen_names = set()
+    top3 = []
+    for item in scored:
+        if item["org"]["name"] not in seen_names:
+            top3.append(item["org"])
+            seen_names.add(item["org"]["name"])
+        if len(top3) == 3:
+            break
 
-    # Generate what to say when calling
+    # If still fewer than 3, fill with All India options not already included
+    if len(top3) < 3:
+        for org in LEGAL_AID_DIRECTORY:
+            if org["district"] == "All India" and org["name"] not in seen_names:
+                top3.append(org)
+                seen_names.add(org["name"])
+            if len(top3) == 3:
+                break
+
     system_prompt = "You are a legal aid advisor. Write a 2-sentence script of what to say when calling a legal aid helpline. Be specific to their situation. Simple language."
     script = call_llm(
         system_prompt,
@@ -136,7 +171,7 @@ def find_aid(situation: str, district: str, state: str) -> dict:
         temperature=0.3
     )
 
-    print(f"[Legal Aid] Found {len(top3)} organisations")
+    print(f"[Legal Aid] Found {len(top3)} organisations: {[o['name'] for o in top3]}")
 
     return {
         "status":      "success",
