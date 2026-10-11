@@ -157,7 +157,7 @@ export default function FIRExplainer() {
                 <button
                   key={l}
                   onClick={() => setLanguage(l)}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold text-base opacity-100 border transition-colors
+                  className={`py-2 px-3 rounded-lg text-xs font-medium border transition-colors
                     ${language === l
                       ? "bg-blue-600 text-white border-blue-600"
                       : "border-gray-200 text-gray-600 hover:border-blue-400"}`}

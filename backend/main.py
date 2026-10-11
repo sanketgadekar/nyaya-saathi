@@ -20,7 +20,7 @@ app.add_middleware(
 
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("output",  exist_ok=True)
-
+os.makedirs("legal_db", exist_ok=True)
 
 # ── Request models ──────────────────────────────────────────────────────────
 
