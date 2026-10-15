@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import shutil, uuid
 import logging
 import time
-from fastapi import HTTPException
+
 
 load_dotenv()
 
