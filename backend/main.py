@@ -8,10 +8,6 @@ import shutil, uuid
 import logging
 import time
 from fastapi import HTTPException
-import logging
-import time
-
-logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -86,96 +82,34 @@ async def explain_fir(
         if os.path.exists(filename):
             os.remove(filename)
 
+# ── Route 2: Rights Awareness ────────────────────────────────────────────────
+
 @app.post("/api/my-rights")
 async def my_rights(req: RightsRequest):
-    started = time.perf_counter()
-    stage = "initialization"
+    from core.rag.retriever          import query_rights
+    from core.llm.groq_client        import call_llm
+    from core.translation.translator import translate_text
 
-    try:
-        from core.rag.retriever import query_rights
-        from core.llm.groq_client import call_llm
-        from core.translation.translator import translate_text
+    retrieved = query_rights(req.situation)
+    context   = "\n".join(retrieved)
 
-        # Stage 1: Retrieve relevant legal rights
-        stage = "retrieval"
-        step_started = time.perf_counter()
-        logger.info("my-rights: retrieval started")
+    answer = call_llm(
+        system_prompt=(
+            "You are a legal rights advisor for Indian citizens. "
+            "Using ONLY the rights listed in the context below, "
+            "explain which rights apply to the user's situation. "
+            "List each right clearly with its exact section number. "
+            "Use simple language. Do not invent rights not in the context."
+        ),
+        user_prompt=f"Situation: {req.situation}\n\nContext:\n{context}"
+    )
 
-        retrieved = query_rights(req.situation)
-        context = "\n".join(retrieved)
+    if req.language != "English":
+        answer = translate_text(answer, req.language)
 
-        logger.info(
-            "my-rights: retrieval completed in %.2fs; documents=%d",
-            time.perf_counter() - step_started,
-            len(retrieved),
-        )
+    return {"status": "success", "rights": answer, "language": req.language}
 
-        if not context.strip():
-            raise RuntimeError("Rights retrieval returned empty context")
 
-        # Stage 2: Generate the legal explanation
-        stage = "llm"
-        step_started = time.perf_counter()
-        logger.info("my-rights: LLM request started")
-
-        answer = call_llm(
-            system_prompt=(
-                "You are a legal rights information assistant for "
-                "Indian citizens. Use ONLY the rights listed in the "
-                "context. Explain which rights may apply, using "
-                "simple language and exact section numbers. "
-                "Do not invent rights not present in the context. "
-                "If the context is insufficient, say so."
-            ),
-            user_prompt=(
-                f"Situation: {req.situation}\n\n"
-                f"Context:\n{context}"
-            ),
-        )
-
-        logger.info(
-            "my-rights: LLM completed in %.2fs",
-            time.perf_counter() - step_started,
-        )
-
-        if not answer or not answer.strip():
-            raise RuntimeError("LLM returned an empty answer")
-
-        # Stage 3: Translate only when necessary
-        if req.language != "English":
-            stage = "translation"
-            step_started = time.perf_counter()
-            logger.info("my-rights: translation started")
-
-            answer = translate_text(answer, req.language)
-
-            logger.info(
-                "my-rights: translation completed in %.2fs",
-                time.perf_counter() - step_started,
-            )
-
-        logger.info(
-            "my-rights: completed successfully in %.2fs",
-            time.perf_counter() - started,
-        )
-
-        return {
-            "status": "success",
-            "rights": answer,
-            "language": req.language,
-        }
-
-    except Exception as exc:
-        logger.exception(
-            "my-rights failed at stage=%s after %.2fs (%s)",
-            stage,
-            time.perf_counter() - started,
-            type(exc).__name__,
-        )
-
-        raise HTTPException(status_code=502,
-            detail=f"Rights service failed during {stage}",
-        ) from exc
 # ── Route 3: Multilingual Legal Chat ────────────────────────────────────────
 
 @app.post("/api/legal-chat")
