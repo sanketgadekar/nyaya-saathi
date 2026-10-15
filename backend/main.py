@@ -8,6 +8,10 @@ import shutil, uuid
 import logging
 import time
 from fastapi import HTTPException
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
